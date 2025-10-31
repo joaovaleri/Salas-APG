@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Alocação de Alunos por Sala</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<script>
+  window.APP_CONFIG = {
+    API_URL: 'api.php' 
+  };
+</script>
+
+
+  <style>
+    :root{ --bg:#0f1115; --panel:#161a22; --muted:#8b93a7; --text:#e6e8ee;
+      --primary:#5b8cff; --danger:#ff6b6b; --ok:#2ecc71; --warn:#f4c430; --hair:#222636; }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0d1016 0%, #0f1115 100%);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;color:var(--text)}
+
+    h1,h2,h3{margin:0 0 .5rem} small{color:var(--muted)}
+    .wrap{max-width:1200px;margin:32px auto;padding:0 16px}
+    .top{ display:flex; gap:12px; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .legend{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+    .chip{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:var(--panel); border:1px solid var(--hair); color:var(--muted); font-size:12px}
+    .chip b{color:var(--text)}
+    .grid{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+    .panel{background:rgba(22,26,34,.9); border:1px solid var(--hair); border-radius:16px; padding:16px; backdrop-filter:blur(6px)}
+    .section-title{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px}
+    .list{display:flex; flex-direction:column; gap:10px; min-height:80px}
+    .card{ background:#121620; border:1px solid #1e2230; border-radius:14px; padding:12px;
+      display:flex; justify-content:space-between; gap:12px; align-items:center; }
+    
+    .card.person-card { cursor: pointer; }
+    .card.person-card:hover { border-color:#2b3042; background:#121a28; }
+
+    .card .meta{display:flex; flex-direction:column; gap:2px}
+    .muted{color:var(--muted); font-size:12px}
+    .row{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+    .btn{ border:1px solid var(--hair); background:transparent; color:var(--text);
+      padding:8px 10px; border-radius:10px; font-size:13px; cursor:pointer; }
+    .btn:hover{border-color:#2b3042}
+    .btn.primary{background:var(--primary); border-color:var(--primary); color:white}
+    .btn.ok{ background: var(--ok); border-color: var(--ok); color: #fff; }
+    .btn.danger{ background: var(--danger); border-color: var(--danger); color: #fff; }
+    .badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; border:1px solid var(--hair); background:#0f1320; color:var(--muted); }
+    .badge.warn{ background:#2a1d10; color:#f4c430; border-color:#3b2b14; }
+    .badge.ok{ background:#0f1f15; color:#2ecc71; border-color:#1b3a28; }
+
+    select{ background:#0f1320; border:1px solid #22283a; color:var(--text);
+      padding:8px 10px; border-radius:10px; font-size:13px; }
+    .room{border:1px dashed #22283a; border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:10px}
+    .room-header{display:flex; justify-content:space-between; align-items:center}
+    .count{font-size:12px; color:var(--muted)}
+    .hr{height:1px; background:linear-gradient(90deg, #1b2132 0%, #2a3248 100%); margin:8px 0}
+    .empty{color:var(--muted); font-size:13px; border:1px dashed #2a3042; padding:12px; border-radius:10px; text-align:center}
+    @media (max-width: 900px){ .grid{grid-template-columns:1fr} }
+
+body.logged-out #app { display: none; }
+body.logged-in  #app { display: block; }
+
+#loginGate{
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+body.logged-out #loginGate { display:flex; }
+body.logged-in  #loginGate { display:none; }
+.login-card{
+  width:min(440px, 92vw);
+  background:rgba(22,26,34,.9);
+  border:1px solid var(--hair);
+  border-radius:16px;
+  padding:20px;
+  text-align:center;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  backdrop-filter: blur(6px);
+}
+#googleBtn{
+  display:flex;              
+  justify-content:center;    
+  margin: 8px 0;            
+}
+
+.login-card h1{ margin-bottom:6px; }
+.login-card .muted{ display:block; margin-bottom:14px; }
+
+
+body.logged-out #loginGate { display:flex; }
+body.logged-in  #loginGate { display:none; }
+
+#spinner{
+  display:none;
+  margin:12px auto 0;
+  border:2px solid #ddd;
+  border-top:2px solid #fff;
+  border-radius:50%;
+  width:18px; height:18px;
+  animation:spin .8s linear infinite
+}
+@keyframes spin { to { transform:rotate(360deg) } }
+#status{font-size:12px; display:block; margin-top:8px; color:var(--muted)}
+#loadingOverlay{
+  position:fixed; inset:0; z-index:2000;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:12px;
+  background:rgba(0,0,0,.45); backdrop-filter: blur(2px);
+  color:#e6e8ee; font-weight:600;
+}
+#loadingOverlay .loader{
+  width:48px; height:48px; border-radius:50%;
+  border:4px solid rgba(255,255,255,.25);
+  border-top-color:#fff;
+  animation:spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+
+.tabs{ display:flex; gap:8px; margin:0 0 10px; flex-wrap:wrap }
+.tab{
+  appearance:none; -webkit-appearance:none;
+  background:transparent;
+  color:var(--text);
+  border:1px solid var(--hair);
+  padding:6px 10px;
+  border-radius:999px;
+  cursor:pointer; font-size:13px; line-height:1;
+}
+.tab:hover{ border-color:#2b3042; }
+.tab:focus-visible{ outline:2px solid #2b3042; outline-offset:2px; }
+.tab.active{
+  background:var(--primary);
+  border-color:var(--primary);
+  color:#fff;
+}
+
+  </style>
+</head>
+<!-- GATE DE LOGIN CENTRAL -->
+
+<body class="logged-out">
+  <!-- ===== Gate de Login no centro ===== -->
+  <div id="loginGate" class="login-center">
+    <div class="login-card">
+      <h1>Entrar</h1>
+      <span class="muted">Use seu e-mail autorizado (@-.br)</span>
+      <div id="googleBtn"></div>
+      <span id="spinner" aria-hidden="true"></span>
+      <span id="status" class="muted"></span>
+<button id="btnFixConn" class="btn" style="display:none;margin-top:10px;">
+  Resolver erro de conexão
+</button>
+
+    </div>
+  </div>
+  <!-- Overlay de carregamento -->
+<div id="loadingOverlay" style="display:none">
+  <div class="loader" aria-hidden="true"></div>
+  <p>Carregando dados…</p>
+</div>
+
+
+  <!-- ===== App (fica invisível até logar) ===== -->
+  <div id="app" class="requires-auth">
+    <div class="wrap">
+      <!-- topo com usuário/logoff -->
+      <div class="whoTop">
+        <div id="who" class="muted" title="Usuário logado"></div>
+        <button id="logoutBtn" class="btn" type="button" onclick="logout()">Sair</button>
+      </div>
+
+      <div class="top">
+        <h1>Alocação de Alunos por Sala <small class="muted">— dados da planilha</small></h1>
+        <div class="legend">
+          <span class="chip"><b>Ações:</b> Alocar (RA/Nome nas vagas da sala)</span>
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- ESQUERDA: Solicitações -->
+        <section class="panel">
+          <div class="section-title">
+            <h2>Solicitações (Forms)</h2>
+            <small class="muted">Origem: planilha do Forms (aba Dados)</small>
+          </div>
+          <div id="requests" class="list"></div>
+        </section>
+
+        <!-- DIREITA: Salas -->
+        <section class="panel">
+          <div class="section-title">
+            <h2>Salas e Ocupação</h2>
+            <small class="muted">Fonte: Pagina1 (A=Sala, C=RA, D=Nome)</small>
+          </div>
+          <div id="floorTabs" class="tabs"></div>
+          <div id="rooms"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    
+    const { CLIENT_ID, GAS_EXEC_URL } = window.APP_CONFIG;
+    let EXTRA_BY_RA = {}; 
+
+
+    const qs  = (sel, el=document)=>el.querySelector(sel);
+    const qsa = (sel, el=document)=>Array.from(el.querySelectorAll(sel));
+    function setStatus(msg, isErr=false){
+      const el=qs('#status'); if(!el) return;
+      el.textContent = msg||'';
+      el.style.color = isErr ? '#ff9c9c' : '#8b93a7';
+    }
+    function spin(on){ const sp=qs('#spinner'); if(sp) sp.style.display = on ? 'inline-block' : 'none'; }
+    function showUser(email){ const w=qs('#who'); if(w) w.textContent = email ? 'Logado como: ' + email : ''; }
+
+ 
+    function toggleAuthUI(isLogged){
+      document.body.classList.toggle('logged-in',  isLogged);
+      document.body.classList.toggle('logged-out', !isLogged);
+    }
+
+
+const { API_URL } = window.APP_CONFIG;
+
+const ACTION_LABELS = {
+  getlayout:       'Carregando salas…',
+  getrequests:     'Carregando solicitações…',
+  allocate:        'Alocando…',
+  excluderequest:  'Excluindo solicitação…',
+  deliverkey:      'Confirmando entrega…',
+  reclaimkey:      'Registrando devolução…',
+  deletepending:   'Excluindo pendente…'
+};
+
+async function callAPI(params, { showLoading=true, label } = {}) {
+  const url = API_URL + '?' + new URLSearchParams(params).toString();
+  if (showLoading) busy(true, label || ACTION_LABELS[String(params.action||'').toLowerCase()] || 'Carregando…');
+  try {
+    const r = await fetch(url, { cache:'no-store', credentials:'include' });
+    
+    let data;
+    const text = await r.text();
+    try { data = JSON.parse(text); } catch {
+      throw new Error(text.trim().slice(0, 200) || `HTTP ${r.status}`);
+    }
+    if (!data.ok) throw new Error(data.error || 'erro');
+    return data;
+  } finally {
+    if (showLoading) busy(false);
+  }
+}
+
+
+
+  
+    let SESSION_KEY = null;
+    let CURRENT_EMAIL = null;
+    let IS_ADMIN = false;
+
+window.onload = async () => {
+  try {
+    const res = await fetch('whoami.php', { credentials: 'include' });
+    const raw = await res.text();
+
+    let data;
+    try { data = JSON.parse(raw); }
+    catch { throw new Error(raw.trim().slice(0,200) || 'Resposta não-JSON do whoami'); }
+
+    if (!data.ok) {
+      throw new Error(data.error || 'sem login');
+    }
+
+    CURRENT_EMAIL = data.email;
+    IS_ADMIN = !!data.isAdmin;
+    SESSION_KEY = CURRENT_EMAIL; 
+
+    showUser(CURRENT_EMAIL);
+    toggleAuthUI(true);
+    busy(true, 'Carregando dados...');
+    await initPage();
+    busy(false);
+  } catch (e) {
+    setStatus('Acesso não autorizado: ' + (e && e.message ? e.message : e), true);
+    toggleAuthUI(false);
+  }
+};
+
+
+   function logout(){
+  location.reload(); 
+}
+
+
+  
+    async function initPage(){
+  await loadLayout();           
+  await new Promise(r => setTimeout(r, 300)); 
+  await loadRequests();         
+}
+
+
+   
+async function loadRequests(){
+  if(!SESSION_KEY){ setStatus('Faça login.', true); return; }
+  setStatus('Carregando solicitações...'); spin(true);
+  const res = await callAPI({ action:'getrequests' }).catch(e=>({ok:false,error:e.message}));
+  spin(false);
+  if(!res || !res.ok){ setStatus('Erro ao carregar solicitações: ' + (res?.error||'desconhecido'), true); return; }
+
+  EXTRA_BY_RA = res.extraByRA || {};
+
+  renderRequests(res.rows||[]);
+  setStatus('');
+
+ 
+  qsa('#requests .card.person-card').forEach(c => {
+    c.addEventListener('click', (ev) => {
+      
+      if (ev.target.closest('button') || ev.target.closest('select')) return;
+      const ra = (c.dataset.ra || '').trim();
+      const nome = (c.dataset.name || '').trim();
+      openDetails(ra, nome);
+    });
+  });
+}
+
+
+    function renderRequests(rows){
+      const cont = qs('#requests'); cont.innerHTML = '';
+      if(!rows || !rows.length){ cont.innerHTML = '<div class="empty">Sem solicitações.</div>'; return; }
+
+      let start = 0;
+      const h = rows[0].map(v => String(v||'').toLowerCase());
+      if (h[0].includes('timestamp') || h[0].includes('data') || h[1].includes('ra') || h[2].includes('sala')) start = 1;
+
+      for (let i = start; i < rows.length; i++) {
+        const nome = String(rows[i][0]||'').trim();
+        const ra   = String(rows[i][1]||'').trim();   
+        const sala = String(rows[i][2]||'').trim();   
+        const st   = String(rows[i][3]||'').trim().toLowerCase(); 
+
+        if (st === 'alocado' || st === 'excluido' || st === 'excluído') continue;
+        if (!nome && !ra) continue;
+
+        const selId = `sel-${ra||('ra'+i)}`;
+        const card = document.createElement('article');
+        card.className = 'card person-card';
+        card.dataset.ra = ra;
+        card.dataset.name = nome;
+        card.dataset.desiredRoom = sala;
+        card.dataset.reqRow = String(i + 1); 
+
+        card.innerHTML = `
+          <div class="meta">
+            <strong>${esc(nome) || '(sem nome)'}</strong>
+            <span class="muted">RA: ${esc(ra) || '—'} • Desejada: ${esc(sala) || '—'}</span>
+          </div>
+          <div class="row">
+            <label class="muted" for="${selId}">Sala:</label>
+            <select id="${selId}">
+              <option value="">${sala ? '(auto / desejada)' : '(escolha)'}</option>
+              ${getRoomIds().map(r => `<option ${r===sala?'selected':''}>${r}</option>`).join('')}
+            </select>
+            <button class="btn primary" onclick="allocateFromRequest(this); event.stopPropagation();">Alocar</button>
+<button class="btn danger"  onclick="excludeRequest(this); event.stopPropagation();">Excluir</button>
+
+          </div>`;
+        cont.appendChild(card);
+      }
+
+      if (!cont.children.length) cont.innerHTML = '<div class="empty">Sem solicitações válidas.</div>';
+    }
+
+ 
+    let LAYOUT_CACHE = null;
+    let FLOOR_LIST   = [];
+    let CURRENT_FLOOR = null;
+
+    function getRoomIds(){
+      if (!LAYOUT_CACHE || !LAYOUT_CACHE.roomsByFloor) return [];
+      const ids = [];
+      for (const floor of Object.keys(LAYOUT_CACHE.roomsByFloor)) {
+        ids.push(...Object.keys(LAYOUT_CACHE.roomsByFloor[floor] || {}));
+      }
+      return ids;
+    }
+
+    async function loadLayout(){
+      if(!SESSION_KEY){ return; }
+      setStatus('Carregando salas...'); spin(true);
+      const res = await callAPI({ action:'getlayout' }).catch(e=>({ok:false,error:e.message}));
+      spin(false);
+      if(!res || !res.ok){ setStatus('Erro ao carregar salas: ' + (res?.error||'desconhecido'), true); return; }
+      buildRooms(res.rows||[]);
+      setStatus('');
+    }
+
+    function buildRooms(rows){
+      LAYOUT_CACHE = { roomsByFloor: {} };
+
+      if (!rows || rows.length <= 1){
+        FLOOR_LIST = [];
+        CURRENT_FLOOR = null;
+        renderFloorTabs();
+        renderRooms();
+        return;
+      }
+
+      const roomsByFloor = {};
+      let lastRoom  = '';
+      let lastFloor = '';
+
+      for (let i = 1; i < rows.length; i++){
+        let idSala = String(rows[i][0] || '').trim();
+        let andar  = String(rows[i][1] || '').trim(); 
+        if (idSala) lastRoom = idSala; else idSala = lastRoom;
+        if (andar)  lastFloor = andar; else andar = lastFloor;
+        if (!idSala) continue;
+
+        const ra   = String(rows[i][2] || '').trim(); 
+        const nome = String(rows[i][3] || '').trim(); 
+        const key  = String(rows[i][7] || '').trim(); 
+
+        if (!roomsByFloor[andar]) roomsByFloor[andar] = {};
+        if (!roomsByFloor[andar][idSala]) roomsByFloor[andar][idSala] = [];
+        roomsByFloor[andar][idSala].push({ row: i+1, ra, nome, key });
+      }
+
+      const foundFloors = Object.keys(roomsByFloor);
+      const pref = ['Térreo','Terreo','T\u00e9rreo','1º andar','1o andar','Primeiro','2º andar','2o andar','Segundo'];
+      foundFloors.sort((a,b)=>{
+        const al = a.toLowerCase(), bl = b.toLowerCase();
+        const ia = pref.findIndex(x=>x.toLowerCase()===al), ib = pref.findIndex(x=>x.toLowerCase()===bl);
+        const va = ia<0?999:ia, vb = ib<0?999:ib;
+        return va!==vb ? va-vb : a.localeCompare(b,'pt-BR');
+      });
+
+      FLOOR_LIST = foundFloors;
+      if (!CURRENT_FLOOR || !FLOOR_LIST.includes(CURRENT_FLOOR)) CURRENT_FLOOR = FLOOR_LIST[0] || null;
+
+      LAYOUT_CACHE.roomsByFloor = roomsByFloor;
+      renderFloorTabs();
+      renderRooms();
+    }
+
+    function renderFloorTabs(){
+      const tabs = qs('#floorTabs');
+      if (!tabs) return;
+      if (!FLOOR_LIST.length){ tabs.innerHTML = ''; return; }
+      tabs.innerHTML = FLOOR_LIST
+        .map(f => `<button class="tab ${f===CURRENT_FLOOR?'active':''}" data-floor="${esc(f)}">${esc(f)}</button>`)
+        .join('');
+      tabs.querySelectorAll('.tab').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          CURRENT_FLOOR = btn.dataset.floor;
+          renderFloorTabs();
+          renderRooms();
+        });
+      });
+    }
+
+    function renderRooms(){
+      const roomsDiv = qs('#rooms');
+      roomsDiv.innerHTML = '';
+      if (!CURRENT_FLOOR || !LAYOUT_CACHE){ roomsDiv.innerHTML = '<div class="empty">Sem layout.</div>'; return; }
+
+      const roomsObj = LAYOUT_CACHE.roomsByFloor[CURRENT_FLOOR] || {};
+      const roomIds = Object.keys(roomsObj);
+      if (!roomIds.length){ roomsDiv.innerHTML = '<div class="empty">Sem salas neste andar.</div>'; return; }
+
+      for (const roomId of roomIds){
+        const arr   = roomsObj[roomId];
+        const cap   = arr.length;
+        const alloc = arr.filter(x => x.ra).length;
+
+        const room = document.createElement('div');
+        room.className = 'room';
+        room.dataset.room = roomId;
+
+        const listId = 'list-'+roomId;
+        room.innerHTML = `
+          <div class="room-header">
+            <h3>Sala ${esc(roomId)}</h3>
+            <div class="count">Alocados: <span data-room-count="${esc(roomId)}">${alloc}</span>/${cap}</div>
+          </div>
+          <div class="list" id="${listId}" data-room-list="${esc(roomId)}"></div>
+          <div class="hr"></div>
+        `;
+        roomsDiv.appendChild(room);
+
+        const ul = room.querySelector('#'+listId);
+        const occupants = arr.filter(x => x.ra);
+        ul.innerHTML = occupants.length
+          ? occupants.map(o => occupantCardHTML({ nome:o.nome, ra:o.ra, roomId, row:o.row, key:o.key })).join('')
+          : '<div class="empty">Nenhum aluno alocado.</div>';
+      }
+    }
+
+    function occupantCardHTML({ nome, ra, roomId, row, key }) {
+  const isPendente = String(key||'').toLowerCase() === 'pendente';
+
+  let controls = '';
+  if (IS_ADMIN) {
+    const btnDeliverOrReclaim = isPendente
+      ? `<button class="btn ok" onclick="deliverKey(${row}); event.stopPropagation();">Entregar Chave</button>`
+      : `<button class="btn danger" onclick="reclaimKey(${row}); event.stopPropagation();">Devolver Chave</button>`;
+    const btnDelete = isPendente
+      ? `<button class="btn danger" onclick="deletePending(${row}, '${css(ra)}', '${css(nome)}'); event.stopPropagation();">Excluir Pendente</button>`
+      : '';
+    controls = `${btnDeliverOrReclaim} ${btnDelete}`;
+  } else {
+    controls = isPendente
+      ? `<span class="badge warn">Pendente</span>`
+      : `<span class="badge ok">Entregue</span>`;
+  }
+
+  return `
+    <article class="card person-card" data-ra="${esc(ra)}" data-name="${esc(nome)}"
+             onclick="openDetails('${css(ra)}','${css(nome)}')">
+      <div class="meta">
+        <strong>${esc(nome)}</strong>
+        <span class="muted">RA: ${esc(ra)} • Sala: ${esc(roomId)}</span>
+      </div>
+      <div class="row">
+        ${controls}
+      </div>
+    </article>
+  `;
+}
+
+
+    
+    async function allocateFromRequest(btn){
+      const card = btn.closest('.card');
+      const ra   = (card.dataset.ra||'').trim();
+      const name = (card.dataset.name||'').trim();
+      const reqRow = card.dataset.reqRow;
+      const desired = (card.dataset.desiredRoom||'').trim();
+      const sel  = card.querySelector('select');
+      const room = (sel && sel.value) ? sel.value.trim() : desired;
+      if (!room){ alert('Escolha uma sala.'); return; }
+
+      setStatus('Alocando...'); spin(true);
+      const res = await callAPI({ action:'allocate', roomId: room, ra, name, reqRow })
+        .catch(e=>({ok:false,error:e.message}));
+      spin(false);
+      if(!res || !res.ok){ setStatus('Erro ao alocar: ' + (res?.error || 'desconhecido'), true); return; }
+
+      await loadLayout(); 
+      card.remove();
+      if (!qs('#requests').children.length) qs('#requests').innerHTML = '<div class="empty">Sem solicitações.</div>';
+      setStatus('Alocado com sucesso!');
+    }
+
+    async function excludeRequest(btn){
+      const card = btn.closest('.card');
+      const reqRow = card.dataset.reqRow;
+      if (!reqRow){ alert('Linha inválida.'); return; }
+
+      setStatus('Excluindo solicitação...'); spin(true);
+      const res = await callAPI({ action:'excluderequest', reqRow })
+                  .catch(e=>({ ok:false, error:e.message }));
+      spin(false);
+      if (!res || !res.ok){ setStatus('Falha ao excluir: ' + (res?.error || 'desconhecido'), true); return; }
+
+      card.remove();
+      if (!qs('#requests').children.length)
+        qs('#requests').innerHTML = '<div class="empty">Sem solicitações.</div>';
+
+      setStatus('Solicitação excluída.');
+    }
+
+    async function deliverKey(row){
+      if (!IS_ADMIN) return;
+      setStatus('Confirmando entrega...'); spin(true);
+      const res = await callAPI({ action:'deliverkey', row })
+        .catch(e=>({ok:false,error:e.message}));
+      spin(false);
+      if(!res || !res.ok){ setStatus('Falha ao confirmar entrega: ' + (res?.error||'desconhecido'), true); return; }
+      await loadLayout();
+      setStatus('Entrega confirmada.');
+    }
+
+    async function reclaimKey(row){
+      if (!IS_ADMIN) return;
+      setStatus('Registrando devolução...'); spin(true);
+      const res = await callAPI({ action:'reclaimkey', row })
+        .catch(e=>({ok:false,error:e.message}));
+      spin(false);
+      if(!res || !res.ok){ setStatus('Falha ao registrar devolução: ' + (res?.error||'desconhecido'), true); return; }
+      await loadLayout();
+      setStatus('Devolução registrada.');
+    }
+
+    async function deletePending(row, ra, nome){
+  if (!IS_ADMIN) return;
+  const who = (nome || ra) ? `(${nome || ''} ${ra ? 'RA '+ra : ''})`.trim() : '';
+  if (!confirm(`Excluir o aluno pendente ${who}? Isso irá limpar RA/Nome/Programa/Nível/Status.`)) return;
+
+  
+  const prevDisabled = [];
+  qsa('.card .btn').forEach(b => { prevDisabled.push([b, b.disabled]); b.disabled = true; });
+
+  try {
+    const res = await callAPI({ action:'deletepending', row, ra, nome })
+      .catch(e => ({ ok:false, error:e.message }));
+    if (!res || !res.ok){
+      setStatus('Falha ao excluir pendente: ' + (res?.error || 'desconhecido'), true);
+      return;
+    }
+
+    await Promise.all([ loadLayout(), loadRequests() ]);
+    setStatus('Aluno pendente excluído.');
+  } finally {
+    prevDisabled.forEach(([b, was]) => { b.disabled = was; });
+  }
+}
+
+async function clearAllSiteData({ knownIDBs=[] } = {}) {
+  const results = { localStorage:false, sessionStorage:false, caches:[], sw:false, idb:[], errors:[] };
+
+  try { localStorage.clear(); results.localStorage = true; } catch(e){ results.errors.push('localStorage: '+e.message); }
+  try { sessionStorage.clear(); results.sessionStorage = true; } catch(e){ results.errors.push('sessionStorage: '+e.message); }
+
+  if (window.caches && caches.keys) {
+    try {
+      const keys = await caches.keys();
+      for (const key of keys) { await caches.delete(key); results.caches.push(key); }
+    } catch(e){ results.errors.push('caches: '+e.message); }
+  }
+
+  if ('serviceWorker' in navigator) {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) await reg.unregister();
+      results.sw = true;
+    } catch(e){ results.errors.push('serviceWorker: '+e.message); }
+  }
+
+  if (window.indexedDB) {
+    if (indexedDB.databases) {
+      try {
+        const dbs = await indexedDB.databases();
+        for (const db of dbs) {
+          if (db && db.name) {
+            await new Promise((res) => {
+              const req = indexedDB.deleteDatabase(db.name);
+              req.onsuccess = () => { results.idb.push(db.name); res(); };
+              req.onerror   = () => { res(); };
+              req.onblocked = () => { res(); };
+            });
+          }
+        }
+      } catch(e){ results.errors.push('indexedDB.databases(): '+e.message); }
+    }
+    for (const name of knownIDBs) {
+      await new Promise((res) => {
+        const req = indexedDB.deleteDatabase(name);
+        req.onsuccess = () => { results.idb.push(name); res(); };
+        req.onerror   = () => res();
+        req.onblocked = () => res();
+      });
+    }
+  }
+
+  return results;
+}
+
+
+function showFixButton(show=true){
+  const btn = qs('#btnFixConn');
+  if (!btn) return;
+  btn.style.display = show ? 'inline-block' : 'none';
+}
+
+
+qs('#btnFixConn')?.addEventListener('click', async () => {
+  const ok = confirm(
+`Isto vai limpar dados locais deste site (cache, storage e SW) e recarregar a página.
+Use se estiver vendo "JSONP failed" ou problemas de conexão. Deseja continuar?`);
+  if (!ok) return;
+
+  try {
+    await clearAllSiteData({ knownIDBs: ['salas-apg-db','controle-chaves-db'] }); 
+  } catch(e) {
+    console.warn('Falha ao limpar completamente:', e);
+  } finally {
+    location.reload();
+  }
+});
+function busy(on, msg){
+  const ov = qs('#loadingOverlay'); if(!ov) return;
+  ov.style.display = on ? 'flex' : 'none';
+  const p = ov.querySelector('p'); if(p && msg) p.textContent = msg;
+}
+
+   
+    function esc(s){ return String(s||'').replace(/[&<>"]/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+    function css(s){ return String(s).replace(/"/g,'\\"'); }
+    function openDetails(ra, nomeFallback='') {
+  ra = String(ra||'').trim();
+  const info = (ra && EXTRA_BY_RA[ra]) ? EXTRA_BY_RA[ra] : null;
+
+  const title = qs('#dmTitle');
+  const body  = qs('#dmBody');
+  const modal = qs('#detailsModal');
+
+  const nome = info?.nome || nomeFallback || '(sem nome)';
+  title.textContent = `Detalhes — ${nome} (RA: ${ra||'—'})`;
+
+  const rows = [
+    ['Curso', info?.curso],
+    ['Nível', info?.nivel],
+    ['Ano de ingresso', info?.anoIngresso],
+    ['Ano de conclusão', info?.anoConclusao],
+    ['Email institucional', info?.emailInst],
+    ['Endereço', info?.endereco],
+    ['Tipo de casa', info?.tipoCasa],
+    ['Há área de estudo em casa?', info?.areaEstudo],
+    ['Tempo de deslocamento até a Unicamp', info?.tempoCasaIME],
+    ['Informações adicionais', info?.observacoes],
+  ];
+
+  body.innerHTML = rows.map(([k,v]) => `
+    <div style="border:1px solid #2b3042; border-radius:12px; padding:10px; background:#0f1320;">
+      <div class="muted" style="font-size:12px; margin-bottom:4px;">${esc(k)}</div>
+      <div>${esc(v || '—')}</div>
+    </div>
+  `).join('');
+
+  modal.style.display = 'flex';
+}
+
+  </script>
+<script>
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.id === 'dmClose') {
+    const m = document.getElementById('detailsModal');
+    if (m) m.style.display = 'none';
+  }
+  
+  if (e.target && e.target.id === 'detailsModal') {
+    e.target.style.display = 'none';
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const m = document.getElementById('detailsModal');
+    if (m && m.style.display !== 'none') m.style.display = 'none';
+  }
+});
+</script>
+
+  <!-- Modal de Detalhes -->
+<div id="detailsModal" style="display:none; position:fixed; inset:0; z-index:3000; align-items:center; justify-content:center; background:rgba(0,0,0,.45); backdrop-filter:blur(2px);">
+  <div style="width:min(680px,95vw); max-height:85vh; overflow:auto; background:#161a22; border:1px solid #2b3042; border-radius:16px; padding:16px; color:#e6e8ee;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+      <h3 id="dmTitle" style="margin:0;">Detalhes do Aluno</h3>
+      <button id="dmClose" class="btn">Fechar</button>
+    </div>
+    <div class="hr" style="height:1px; background:linear-gradient(90deg,#1b2132,#2a3248); margin:8px 0;"></div>
+    <div id="dmBody" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <!-- preenchido via JS -->
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
